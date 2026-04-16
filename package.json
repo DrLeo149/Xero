@@ -1,0 +1,11 @@
+{
+  "name": "mynumbers",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd backend && npm ci && npx prisma generate && cd ../frontend && npm ci",
+    "build": "cd frontend && npm run build && cd ../backend && npm run build",
+    "start": "cd backend && npx prisma migrate deploy && node dist/index.js",
+    "seed": "cd backend && npx tsx src/db/seed.ts"
+  }
+}

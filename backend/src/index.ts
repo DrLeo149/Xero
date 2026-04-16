@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { env } from './lib/env.js';
 import { authRouter } from './api/auth.routes.js';
 import { xeroRouter } from './api/xero.routes.js';
@@ -10,6 +12,7 @@ import { tenantsRouter } from './api/tenants.routes.js';
 import { telemetryRouter, analyticsRouter } from './api/telemetry.routes.js';
 import { bootScheduler } from './scheduler/index.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -28,8 +31,20 @@ app.use('/api/tenants', tenantsRouter);
 app.use('/api/telemetry', telemetryRouter);
 app.use('/api/admin/analytics', analyticsRouter);
 
-// 404 fallback
-app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+// ---- Serve frontend in production ----------------------------------------
+// In production the Vite build output sits at ../frontend/dist relative to the
+// backend source root (two levels up from dist/index.js).
+if (env.NODE_ENV === 'production') {
+  const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendDist, { maxAge: '30d', immutable: true }));
+  // SPA fallback: any non-API route serves index.html so React Router works.
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  // Dev: 404 for unknown routes (frontend runs on Vite dev server)
+  app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+}
 
 const server = app.listen(env.PORT, async () => {
   console.log(`[server] listening on http://localhost:${env.PORT}`);
