@@ -11,14 +11,21 @@ import { dashboardRouter } from './api/dashboard.routes.js';
 import { tenantsRouter } from './api/tenants.routes.js';
 import { telemetryRouter, analyticsRouter } from './api/telemetry.routes.js';
 import { bootScheduler } from './scheduler/index.js';
+import { apiLimiter, syncLimiter } from './middleware/rateLimiter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+// Trust proxy so rate limiter sees real client IPs behind Railway/nginx
+app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
+
+// Global rate limit on all API routes (120 req/min per IP)
+app.use('/api', apiLimiter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, env: env.NODE_ENV, time: new Date().toISOString() });

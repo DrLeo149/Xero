@@ -20,8 +20,8 @@ export default function Login() {
     setErr(null);
     setLoading(true);
     try {
-      const res = await api.post<{ token: string; user: User }>('/api/auth/login', { email, password });
-      setAuth(res.token, res.user);
+      const res = await api.post<{ token: string; refreshToken: string; user: User }>('/api/auth/login', { email, password });
+      setAuth(res.token, res.user, res.refreshToken);
       nav('/');
     } catch (e: any) {
       setErr(e.message);

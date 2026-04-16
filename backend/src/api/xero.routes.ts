@@ -3,20 +3,34 @@ import crypto from 'node:crypto';
 import { prisma } from '../db/client.js';
 import { env, xeroConfigured } from '../lib/env.js';
 import { newXeroClient } from '../xero/client.js';
-import { signJwt } from '../auth/jwt.js';
+import { signAccessToken, createRefreshToken } from '../auth/jwt.js';
 import { requireAuth, requireRole, resolveTenant } from '../middleware/auth.js';
+import { authLimiter, syncLimiter } from '../middleware/rateLimiter.js';
 import { runSync } from '../xero/sync.js';
 
 export const xeroRouter = Router();
+
+/**
+ * PKCE helpers (RFC 7636).
+ * We generate a random code_verifier, hash it to a code_challenge, send the
+ * challenge with the auth request, and present the verifier on token exchange.
+ * Prevents authorization code interception even if the redirect is snooped.
+ */
+function generatePkce() {
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
 
 /**
  * In-memory store of pending OAuth state.
  * Two flavours:
  *   - "connect": admin/client linking Xero to an existing tenant (has tenantId + userId)
  *   - "signup":  anonymous user signing up via Xero (no tenantId/userId yet)
+ * Both store the PKCE code_verifier for the token exchange.
  */
-interface PendingConnect { kind: 'connect'; tenantId: string; userId: string; expiresAt: number }
-interface PendingSignup { kind: 'signup'; expiresAt: number }
+interface PendingConnect { kind: 'connect'; tenantId: string; userId: string; codeVerifier: string; expiresAt: number }
+interface PendingSignup { kind: 'signup'; codeVerifier: string; expiresAt: number }
 type PendingState = PendingConnect | PendingSignup;
 
 const pendingStates = new Map<string, PendingState>();
@@ -30,7 +44,7 @@ setInterval(() => {
  * Anonymous - no login required. Starts OAuth flow that will auto-create
  * a user + tenant on callback. This is the main self-serve entry point.
  */
-xeroRouter.get('/signup', async (_req, res) => {
+xeroRouter.get('/signup', authLimiter, async (_req, res) => {
   if (!xeroConfigured) {
     return res.status(503).json({
       error: 'Xero is not configured. Set XERO_CLIENT_ID and XERO_CLIENT_SECRET in backend/.env',
@@ -38,14 +52,16 @@ xeroRouter.get('/signup', async (_req, res) => {
   }
 
   const state = crypto.randomBytes(24).toString('hex');
-  pendingStates.set(state, { kind: 'signup', expiresAt: Date.now() + 10 * 60_000 });
+  const pkce = generatePkce();
+  pendingStates.set(state, { kind: 'signup', codeVerifier: pkce.verifier, expiresAt: Date.now() + 10 * 60_000 });
 
   const client = newXeroClient();
   await client.initialize();
   const consentUrl = await client.buildConsentUrl();
   const url = new URL(consentUrl);
   url.searchParams.set('state', state);
-  // Redirect the browser directly to Xero (called as a full page navigation)
+  url.searchParams.set('code_challenge', pkce.challenge);
+  url.searchParams.set('code_challenge_method', 'S256');
   res.redirect(url.toString());
 });
 
@@ -68,21 +84,23 @@ xeroRouter.get('/connect', requireAuth, resolveTenant(true), async (req, res) =>
   }
 
   const state = crypto.randomBytes(24).toString('hex');
+  const pkce = generatePkce();
   pendingStates.set(state, {
     kind: 'connect',
     tenantId,
     userId: req.user!.sub,
+    codeVerifier: pkce.verifier,
     expiresAt: Date.now() + 10 * 60_000,
   });
 
   const client = newXeroClient();
   await client.initialize();
   const consentUrl = await client.buildConsentUrl();
-  // Inject our state into the Xero URL
   const url = new URL(consentUrl);
   url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge', pkce.challenge);
+  url.searchParams.set('code_challenge_method', 'S256');
   console.log('[xero connect] consent URL:', url.toString());
-  console.log('[xero connect] scope param:', url.searchParams.get('scope'));
   res.json({ url: url.toString() });
 });
 
@@ -111,6 +129,8 @@ xeroRouter.get('/callback', async (req, res) => {
   try {
     const client = newXeroClient();
     (client as any).config.state = state;
+    // Pass PKCE code_verifier for the token exchange
+    (client as any).config.codeVerifier = pending.codeVerifier;
     const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
     const tokenSet = await client.apiCallback(fullUrl);
     await client.updateTenants(false);
@@ -155,13 +175,14 @@ xeroRouter.get('/callback', async (req, res) => {
       });
       await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
-      const jwt = signJwt({
+      const accessToken = signAccessToken({
         sub: user.id,
         email: user.email,
         role: user.role as 'admin' | 'client',
         tenantId: user.tenantId,
       });
-      return res.redirect(`${env.FRONTEND_URL}/auth/callback#token=${jwt}`);
+      const refreshToken = await createRefreshToken(user.id);
+      return res.redirect(`${env.FRONTEND_URL}/auth/callback#token=${accessToken}&refresh=${refreshToken}`);
     }
 
     // Brand new user - create tenant + user + xero connection in one transaction
@@ -188,19 +209,20 @@ xeroRouter.get('/callback', async (req, res) => {
       return { tenant, user: newUser };
     });
 
-    const jwt = signJwt({
+    const accessToken = signAccessToken({
       sub: result.user.id,
       email: result.user.email,
       role: 'client',
       tenantId: result.tenant.id,
     });
+    const refreshToken = await createRefreshToken(result.user.id);
 
     // Kick off first sync in the background (don't await)
     runSync(result.tenant.id, 'initial').catch((e) =>
       console.error('[signup] initial sync failed:', e.message),
     );
 
-    return res.redirect(`${env.FRONTEND_URL}/auth/callback#token=${jwt}`);
+    return res.redirect(`${env.FRONTEND_URL}/auth/callback#token=${accessToken}&refresh=${refreshToken}`);
   } catch (e: any) {
     console.error('[xero callback]', e);
     res.redirect(`${env.FRONTEND_URL}/login?xero=error&msg=${encodeURIComponent(e.message ?? 'unknown')}`);
@@ -208,7 +230,7 @@ xeroRouter.get('/callback', async (req, res) => {
 });
 
 /** POST /api/xero/sync - trigger a manual sync for the current tenant */
-xeroRouter.post('/sync', requireAuth, resolveTenant(true), async (req, res) => {
+xeroRouter.post('/sync', syncLimiter, requireAuth, resolveTenant(true), async (req, res) => {
   const tenantId = req.tenantId!;
   try {
     const log = await runSync(tenantId, 'manual');

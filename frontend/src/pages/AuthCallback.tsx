@@ -6,9 +6,9 @@ import { api } from '../lib/api';
 /**
  * /auth/callback
  *
- * Xero OAuth redirects here with #token=<jwt> in the fragment.
- * We store the token, fetch the user profile, and redirect to the dashboard.
- * The token is in the fragment (not query string) so it never hits the server logs.
+ * Xero OAuth redirects here with #token=<jwt>&refresh=<token> in the fragment.
+ * We store both tokens, fetch the user profile, and redirect to the dashboard.
+ * The tokens are in the fragment (not query string) so they never hit server logs.
  */
 export default function AuthCallback() {
   const setAuth = useAuth((s) => s.setAuth);
@@ -16,19 +16,24 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const hash = window.location.hash;
-    const token = new URLSearchParams(hash.replace('#', '?')).get('token');
+    const params = new URLSearchParams(hash.replace('#', '?'));
+    const token = params.get('token');
+    const refreshToken = params.get('refresh');
 
     if (!token) {
       nav('/login', { replace: true });
       return;
     }
 
+    // Clear the fragment from the URL so tokens aren't visible in history
+    window.history.replaceState(null, '', '/auth/callback');
+
     // Temporarily set the token so api.get can use it
-    useAuth.setState({ token });
+    useAuth.setState({ token, refreshToken });
 
     api.get<User>('/api/auth/me')
       .then((user) => {
-        setAuth(token, user);
+        setAuth(token, user, refreshToken ?? undefined);
         nav('/', { replace: true });
       })
       .catch(() => {

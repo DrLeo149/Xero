@@ -26,8 +26,9 @@ model User {
   createdAt    DateTime @default(now())
   lastLoginAt  DateTime?
 
-  usageEvents  UsageEvent[]
-  auditLogs    AuditLog[]
+  usageEvents   UsageEvent[]
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
 
   @@index([tenantId])
 }
@@ -155,6 +156,18 @@ model SyncLog {
   errorMsg   String?
 
   @@index([tenantId, startedAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique  // SHA-256 hash of the actual token
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model AuditLog {

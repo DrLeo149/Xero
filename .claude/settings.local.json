@@ -43,7 +43,8 @@
       "Bash(curl -s http://localhost:5173)",
       "Bash(findstr \":3000\")",
       "Bash(tasklist /FI \"PID eq 28724\")",
-      "Bash(curl -s http://localhost:3001/api/health)"
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(curl -s http://localhost:5173/api/health)"
     ]
   }
 }
