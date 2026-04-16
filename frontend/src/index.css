@@ -1,0 +1,180 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/fraunces/400.css';
+@import '@fontsource/fraunces/500.css';
+@import '@fontsource/fraunces/600.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme tokens ---------- */
+:root {
+  --canvas:        #FAFAF7;
+  --canvas-raised: #FFFFFF;
+  --canvas-sunken: #F4F4EE;
+
+  --ink-900: #0B0F0C;
+  --ink-800: #111714;
+  --ink-700: #1F2A22;
+  --ink-500: #4B5A50;
+  --ink-400: #6B7A6F;
+  --ink-300: #94A396;
+  --ink-200: #CBD3CB;
+  --ink-100: #E6EAE5;
+  --ink-50:  #F1F4EF;
+
+  --accent-50:  #F1F8F3;
+  --accent-100: #DCEFE1;
+  --accent-200: #B9DFC3;
+  --accent-300: #8FCA9F;
+  --accent-400: #5BAE73;
+  --accent-500: #2F8F4D;
+  --accent-600: #166534;
+  --accent-700: #115029;
+  --accent-800: #0D3E20;
+  --accent-900: #0A2E19;
+
+  --positive: #15803D;
+  --warning:  #B45309;
+  --negative: #B91C1C;
+
+  --hairline: #E6EAE5;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --card-shadow-raised: 0 4px 16px -8px rgba(15, 23, 42, 0.12);
+}
+
+.dark {
+  --canvas:        #0B1410;
+  --canvas-raised: #131D17;
+  --canvas-sunken: #0A110D;
+
+  --ink-900: #F1F5F2;
+  --ink-800: #DDE5DF;
+  --ink-700: #BEC9C1;
+  --ink-500: #8B9A8F;
+  --ink-400: #6B7A70;
+  --ink-300: #4F5D54;
+  --ink-200: #3A4741;
+  --ink-100: #26302B;
+  --ink-50:  #1A2420;
+
+  /* Accent flips: primary becomes lighter so buttons read on dark bg */
+  --accent-50:  #15301E;
+  --accent-100: #1A3B25;
+  --accent-200: #1F4A2E;
+  --accent-300: #2F8F4D;
+  --accent-400: #5BAE73;
+  --accent-500: #8FCA9F;
+  --accent-600: #5BAE73;
+  --accent-700: #8FCA9F;
+  --accent-800: #B9DFC3;
+  --accent-900: #DCEFE1;
+
+  --positive: #4ADE80;
+  --warning:  #FBBF24;
+  --negative: #F87171;
+
+  --hairline: #26302B;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --card-shadow-raised: 0 4px 20px -8px rgba(0, 0, 0, 0.55);
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--canvas);
+    color: var(--ink-900);
+  }
+
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+
+  /* Tabular figures everywhere a number shows. */
+  .num, td.num, .font-display {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: 'tnum', 'lnum';
+  }
+
+  /* Thin scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* Golden glare sweep for the "Free expert review" chip. Runs every 30s:
+   - 0-5% of the cycle: gold stripe sweeps diagonally from left to right
+   - 5-100%: stripe parks off-screen so the chip looks static
+   Pure CSS, GPU-transform only, no JS timer needed. */
+@keyframes chip-glare {
+  0%   { transform: translateX(-120%) skewX(-20deg); }
+  5%   { transform: translateX(220%)  skewX(-20deg); }
+  100% { transform: translateX(220%)  skewX(-20deg); }
+}
+.chip-glare {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.chip-glare::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 215, 0, 0.0) 20%,
+    rgba(255, 215, 0, 0.55) 50%,
+    rgba(255, 215, 0, 0.0) 80%,
+    transparent 100%
+  );
+  pointer-events: none;
+  transform: translateX(-120%) skewX(-20deg);
+  animation: chip-glare 30s linear infinite;
+  z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip-glare::after { animation: none; }
+}
+
+@layer components {
+  .smallcaps {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-400);
+  }
+
+  .hairline {
+    border-color: var(--hairline);
+  }
+
+  .card {
+    background: var(--canvas-raised);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .card-hover {
+    transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--card-shadow-raised);
+  }
+}

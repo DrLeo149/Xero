@@ -1,0 +1,189 @@
+// Xero Financial Dashboard — Prisma schema
+// Multi-tenant: every Xero-data table has a `tenantId` foreign key.
+// Local dev: SQLite. Production (Railway): PostgreSQL. Same schema works for both.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Identity & tenancy
+// ----------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?  // display name shown in UI; falls back to email if null
+  passwordHash String
+  role         String   // "admin" | "client"
+  tenantId     String?  // null for admin users; FK for client users
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  lastLoginAt  DateTime?
+
+  usageEvents  UsageEvent[]
+  auditLogs    AuditLog[]
+
+  @@index([tenantId])
+}
+
+model Tenant {
+  id             String    @id @default(cuid())
+  companyName    String
+  createdAt      DateTime  @default(now())
+  refreshCron    String?   // e.g. "0 */6 * * *"; null = manual only
+  lastSyncedAt   DateTime?
+
+  users          User[]
+  xeroConnection XeroConnection?
+  invoices       XeroInvoice[]
+  contacts       XeroContact[]
+  bankTxns       XeroBankTransaction[]
+  reports        XeroReportSnapshot[]
+  syncLogs       SyncLog[]
+  usageEvents    UsageEvent[]
+}
+
+// ----------------------------------------------------------------------------
+// Xero connection + cached data
+// ----------------------------------------------------------------------------
+
+model XeroConnection {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  xeroTenantId  String   // Xero's org GUID
+  orgName       String
+  baseCurrency  String?  // ISO 4217 code from Xero org (e.g. "USD", "GBP", "INR")
+  accessToken   String
+  refreshToken  String
+  expiresAt     DateTime
+  scopes        String
+  connectedAt   DateTime @default(now())
+  connectedBy   String   // user id
+}
+
+model XeroInvoice {
+  id                String   @id             // Xero InvoiceID
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId         String?
+  contactName       String?
+  invoiceNumber     String?
+  type              String   // ACCREC | ACCPAY
+  status            String   // DRAFT | SUBMITTED | AUTHORISED | PAID | VOIDED | DELETED
+  date              DateTime
+  dueDate           DateTime?
+  subTotal          Float
+  totalTax          Float
+  total             Float
+  amountDue         Float
+  amountPaid        Float
+  fullyPaidOnDate   DateTime?
+  currency          String
+  updatedDateUtc    DateTime
+  syncedAt          DateTime @default(now())
+
+  @@index([tenantId, date])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+}
+
+model XeroContact {
+  id             String   @id             // Xero ContactID
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  isCustomer     Boolean  @default(false)
+  isSupplier     Boolean  @default(false)
+  email          String?
+  updatedDateUtc DateTime
+  syncedAt       DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model XeroBankTransaction {
+  id             String   @id
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type           String   // RECEIVE | SPEND | TRANSFER
+  status         String
+  date           DateTime
+  total          Float
+  bankAccountId  String?
+  bankAccountName String?
+  reference      String?
+  updatedDateUtc DateTime
+  syncedAt       DateTime @default(now())
+
+  @@index([tenantId, date])
+}
+
+// Stores raw JSON of Xero /Reports/* responses so the KPI layer can reshape on demand.
+model XeroReportSnapshot {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportType  String   // "ProfitAndLoss" | "BalanceSheet" | "AgedReceivablesByContact" | ...
+  periodStart DateTime?
+  periodEnd   DateTime?
+  payload     String   // JSON-stringified report body
+  fetchedAt   DateTime @default(now())
+
+  @@index([tenantId, reportType, fetchedAt])
+}
+
+// ----------------------------------------------------------------------------
+// Operational logs
+// ----------------------------------------------------------------------------
+
+model SyncLog {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trigger    String    // "manual" | "scheduled"
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    // "running" | "success" | "error"
+  itemsSynced Int      @default(0)
+  errorMsg   String?
+
+  @@index([tenantId, startedAt])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action         String
+  targetTenantId String?
+  meta           String?  // JSON
+  occurredAt     DateTime @default(now())
+
+  @@index([occurredAt])
+}
+
+// ----------------------------------------------------------------------------
+// Usage telemetry
+// ----------------------------------------------------------------------------
+
+model UsageEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId   String?  // null if admin acting outside tenant scope
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  eventType  String   // "session_start" | "page_view" | "page_active" | "widget_view" | "widget_click" | "manual_refresh" | "export" | ...
+  meta       String?  // JSON payload
+  occurredAt DateTime @default(now())
+
+  @@index([tenantId, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([eventType, occurredAt])
+}
