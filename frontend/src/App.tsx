@@ -5,6 +5,7 @@ import {
   TailorIcon, SettingsIcon, TenantsIcon, AnalyticsIcon,
 } from './components/Icons';
 import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
 import Pulse from './pages/Pulse';
 import Profit from './pages/Profit';
 import CashFlow from './pages/CashFlow';
@@ -253,6 +254,7 @@ export default function App() {
     <Shell>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/" element={<Protected><Pulse /></Protected>} />
         <Route path="/profit" element={<Protected><Profit /></Protected>} />
         <Route path="/cash" element={<Protected><CashFlow /></Protected>} />
