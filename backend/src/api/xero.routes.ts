@@ -11,26 +11,21 @@ import { runSync } from '../xero/sync.js';
 export const xeroRouter = Router();
 
 /**
- * PKCE helpers (RFC 7636).
- * We generate a random code_verifier, hash it to a code_challenge, send the
- * challenge with the auth request, and present the verifier on token exchange.
- * Prevents authorization code interception even if the redirect is snooped.
- */
-function generatePkce() {
-  const verifier = crypto.randomBytes(32).toString('base64url');
-  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-  return { verifier, challenge };
-}
-
-/**
  * In-memory store of pending OAuth state.
- * Two flavours:
- *   - "connect": admin/client linking Xero to an existing tenant (has tenantId + userId)
- *   - "signup":  anonymous user signing up via Xero (no tenantId/userId yet)
- * Both store the PKCE code_verifier for the token exchange.
+ *
+ * Note: PKCE was attempted but the xero-node SDK doesn't propagate the
+ * code_verifier through to the token exchange (results in invalid_grant
+ * "Missing code_verifier"). Removed - server-side OAuth with the state
+ * parameter and a confidential client (client_secret) is sufficient for
+ * a confidential web application per RFC 6749. PKCE is primarily for
+ * public clients (SPAs, mobile) where the client_secret can't be kept secret.
+ *
+ * Two state flavours:
+ *   - "connect": admin/client linking Xero to an existing tenant
+ *   - "signup":  anonymous user signing up via Xero
  */
-interface PendingConnect { kind: 'connect'; tenantId: string; userId: string; codeVerifier: string; expiresAt: number }
-interface PendingSignup { kind: 'signup'; codeVerifier: string; expiresAt: number }
+interface PendingConnect { kind: 'connect'; tenantId: string; userId: string; expiresAt: number }
+interface PendingSignup { kind: 'signup'; expiresAt: number }
 type PendingState = PendingConnect | PendingSignup;
 
 const pendingStates = new Map<string, PendingState>();
@@ -52,16 +47,13 @@ xeroRouter.get('/signup', authLimiter, async (_req, res) => {
   }
 
   const state = crypto.randomBytes(24).toString('hex');
-  const pkce = generatePkce();
-  pendingStates.set(state, { kind: 'signup', codeVerifier: pkce.verifier, expiresAt: Date.now() + 10 * 60_000 });
+  pendingStates.set(state, { kind: 'signup', expiresAt: Date.now() + 10 * 60_000 });
 
   const client = newXeroClient();
   await client.initialize();
   const consentUrl = await client.buildConsentUrl();
   const url = new URL(consentUrl);
   url.searchParams.set('state', state);
-  url.searchParams.set('code_challenge', pkce.challenge);
-  url.searchParams.set('code_challenge_method', 'S256');
   res.redirect(url.toString());
 });
 
@@ -84,12 +76,10 @@ xeroRouter.get('/connect', requireAuth, resolveTenant(true), async (req, res) =>
   }
 
   const state = crypto.randomBytes(24).toString('hex');
-  const pkce = generatePkce();
   pendingStates.set(state, {
     kind: 'connect',
     tenantId,
     userId: req.user!.sub,
-    codeVerifier: pkce.verifier,
     expiresAt: Date.now() + 10 * 60_000,
   });
 
@@ -98,8 +88,6 @@ xeroRouter.get('/connect', requireAuth, resolveTenant(true), async (req, res) =>
   const consentUrl = await client.buildConsentUrl();
   const url = new URL(consentUrl);
   url.searchParams.set('state', state);
-  url.searchParams.set('code_challenge', pkce.challenge);
-  url.searchParams.set('code_challenge_method', 'S256');
   console.log('[xero connect] consent URL:', url.toString());
   res.json({ url: url.toString() });
 });
@@ -129,8 +117,6 @@ xeroRouter.get('/callback', async (req, res) => {
   try {
     const client = newXeroClient();
     (client as any).config.state = state;
-    // Pass PKCE code_verifier for the token exchange
-    (client as any).config.codeVerifier = pending.codeVerifier;
     const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
     const tokenSet = await client.apiCallback(fullUrl);
     await client.updateTenants(false);
