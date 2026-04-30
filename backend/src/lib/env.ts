@@ -19,8 +19,10 @@ export const env = {
   XERO_CLIENT_ID: process.env.XERO_CLIENT_ID ?? '',
   XERO_CLIENT_SECRET: process.env.XERO_CLIENT_SECRET ?? '',
   XERO_REDIRECT_URI: process.env.XERO_REDIRECT_URI ?? 'http://localhost:3000/api/xero/callback',
+  // Hardcoded - these are the scopes the app needs. The XERO_SCOPES env var
+  // is intentionally ignored to prevent stale/wrong values in deployment
+  // environments from breaking OAuth with "Invalid scope for client" errors.
   XERO_SCOPES:
-    process.env.XERO_SCOPES ??
     'openid profile email offline_access accounting.transactions.read accounting.contacts.read accounting.reports.read accounting.settings.read',
 
   SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com',
