@@ -135,6 +135,12 @@ xeroRouter.get('/callback', async (req, res) => {
 
     // ---- Flow 1: existing-user connect ----
     if (pending.kind === 'connect') {
+      // Verify the tenant still exists before upserting (defensive against
+      // stale state from prior dev/db wipes)
+      const tenantExists = await prisma.tenant.findUnique({ where: { id: pending.tenantId } });
+      if (!tenantExists) {
+        return res.redirect(`${env.FRONTEND_URL}/login?xero=error&msg=tenant_not_found`);
+      }
       await prisma.xeroConnection.upsert({
         where: { tenantId: pending.tenantId },
         create: { ...tokenData, tenantId: pending.tenantId, connectedBy: pending.userId },
@@ -144,16 +150,14 @@ xeroRouter.get('/callback', async (req, res) => {
     }
 
     // ---- Flow 2: self-serve signup ----
-    // Get the user's email from the id_token claims
     const idClaims = tokenSet.claims?.() ?? {} as any;
     const email = (idClaims.email as string | undefined)?.toLowerCase();
     if (!email) throw new Error('Xero did not return an email. Make sure openid+email scopes are granted.');
 
-    // Check if this user already exists (returning user)
     let user = await prisma.user.findUnique({ where: { email } });
 
+    // ---- 2a. Returning user with tenant: just refresh tokens and log in ----
     if (user && user.tenantId) {
-      // Returning user - update Xero tokens and log them in
       await prisma.xeroConnection.upsert({
         where: { tenantId: user.tenantId },
         create: { ...tokenData, tenantId: user.tenantId, connectedBy: user.id },
@@ -171,7 +175,35 @@ xeroRouter.get('/callback', async (req, res) => {
       return res.redirect(`${env.FRONTEND_URL}/auth/callback#token=${accessToken}&refresh=${refreshToken}`);
     }
 
-    // Brand new user - create tenant + user + xero connection in one transaction
+    // ---- 2b. Existing admin (tenantId=null) connecting Xero for the first time ----
+    // Don't create a duplicate user (email is unique). Just spin up a tenant
+    // and link Xero to it; admin keeps their admin role and can manage it.
+    if (user && !user.tenantId) {
+      const result = await prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: { companyName: xeroTenant.tenantName ?? email.split('@')[0] },
+        });
+        await tx.xeroConnection.create({
+          data: { ...tokenData, tenantId: tenant.id, connectedBy: user!.id },
+        });
+        await tx.user.update({ where: { id: user!.id }, data: { lastLoginAt: new Date() } });
+        return { tenant };
+      });
+
+      const accessToken = signAccessToken({
+        sub: user.id,
+        email: user.email,
+        role: 'admin',
+        tenantId: null,
+      });
+      const refreshToken = await createRefreshToken(user.id);
+      runSync(result.tenant.id, 'manual').catch((e) =>
+        console.error('[signup] initial sync failed:', e.message),
+      );
+      return res.redirect(`${env.FRONTEND_URL}/auth/callback#token=${accessToken}&refresh=${refreshToken}`);
+    }
+
+    // ---- 2c. Brand new user - create tenant + user + xero connection ----
     const result = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: { companyName: xeroTenant.tenantName ?? email.split('@')[0] },
