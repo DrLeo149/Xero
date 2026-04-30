@@ -218,7 +218,7 @@ xeroRouter.get('/callback', async (req, res) => {
     const refreshToken = await createRefreshToken(result.user.id);
 
     // Kick off first sync in the background (don't await)
-    runSync(result.tenant.id, 'initial').catch((e) =>
+    runSync(result.tenant.id, 'manual').catch((e) =>
       console.error('[signup] initial sync failed:', e.message),
     );
 
