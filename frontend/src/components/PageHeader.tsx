@@ -52,18 +52,18 @@ export default function PageHeader({
   const showRefresh = DATA_TABS.includes(loc.pathname);
   return (
     <div
-      className="sticky top-0 z-30 -mx-10 px-10 pt-5 pb-4 border-b hairline mb-8"
+      className="sticky top-14 lg:top-0 z-30 -mx-4 lg:-mx-10 px-4 lg:px-10 pt-5 pb-4 border-b hairline mb-6 lg:mb-8"
       style={{ backgroundColor: 'var(--canvas)' }}
     >
-      <div className="flex items-start justify-between gap-6 flex-wrap">
+      <div className="flex items-start justify-between gap-3 lg:gap-6 flex-wrap">
         <div className="min-w-0">
           {tag && <div className="smallcaps mb-1.5">{tag}</div>}
-          <h1 className="font-display text-[24px] text-ink-900 tracking-tight leading-none">
+          <h1 className="font-display text-[20px] lg:text-[24px] text-ink-900 tracking-tight leading-none">
             {title}
           </h1>
           {meta && <div className="text-xs text-ink-400 mt-1.5">{meta}</div>}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
           <ExpertReviewChip />
           {right}
           {showRefresh && <RefreshButton />}

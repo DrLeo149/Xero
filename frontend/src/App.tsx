@@ -85,12 +85,18 @@ function Shell({ children }: { children: React.ReactNode }) {
     return localStorage.getItem(SIDEBAR_KEY) === '1';
   });
 
+  // Mobile drawer state - slides the sidebar in from the left on small screens.
+  // On desktop (lg+) the sidebar is always visible and this flag is ignored.
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0');
   }, [collapsed]);
 
   useEffect(() => {
     track('page_view', { path: loc.pathname });
+    // Close mobile drawer when navigating
+    setMobileOpen(false);
   }, [loc.pathname]);
 
   if (!user) return <>{children}</>;
@@ -107,13 +113,47 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-canvas text-ink-900">
-      {/* Sidebar - sticky, full viewport height, independent scroll */}
+      {/* Mobile-only top bar: hamburger toggle + brand. Desktop hides this. */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 px-4 flex items-center justify-between border-b hairline" style={{ backgroundColor: 'var(--canvas-raised)' }}>
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 -ml-2 text-ink-700 hover:text-ink-900"
+          aria-label="Open menu"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <Link to="/" className="flex items-center gap-2">
+          <BrandMark size={22} />
+          <span className="font-display text-[17px] leading-none text-ink-900 tracking-tight">mynumbers</span>
+        </Link>
+        <div className="w-9" aria-hidden /> {/* spacer to balance hamburger */}
+      </div>
+
+      {/* Mobile drawer backdrop */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/40"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      {/* Sidebar - sticky on desktop, slide-out drawer on mobile */}
       <aside
         className={[
-          'shrink-0 border-r hairline bg-canvas-raised flex flex-col',
-          'sticky top-0 h-screen overflow-y-auto',
-          'transition-[width] duration-200 ease-out',
-          collapsed ? 'w-[60px]' : 'w-[200px]',
+          'border-r hairline bg-canvas-raised flex flex-col',
+          // Desktop: sticky, takes layout space
+          'lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:translate-x-0',
+          'lg:transition-[width] lg:duration-200 lg:ease-out',
+          // Mobile: fixed off-screen drawer, slides in when open
+          'fixed inset-y-0 left-0 z-50 w-[240px] overflow-y-auto transition-transform duration-200 ease-out',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          // Desktop width
+          collapsed ? 'lg:w-[60px]' : 'lg:w-[200px]',
         ].join(' ')}
       >
         {/* Brand + collapse */}
@@ -236,7 +276,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 min-w-0">
-        <div className="max-w-[1280px] mx-auto px-10 pb-10">{children}</div>
+        {/* Top padding on mobile to clear the fixed top bar (h-14) */}
+        <div className="max-w-[1280px] mx-auto px-4 pb-10 pt-14 lg:px-10 lg:pt-0">{children}</div>
       </main>
     </div>
   );

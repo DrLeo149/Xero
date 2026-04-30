@@ -51,7 +51,10 @@
       "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(64\\).toString\\('hex'\\)\\)\")",
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "mcp__Claude_in_Chrome__navigate",
-      "mcp__Claude_in_Chrome__computer"
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(curl -s -o /dev/null -w \"Status: %{http_code}\\\\nTime: %{time_total}s\\\\n\" https://app.mynumbers.io/api/health)",
+      "Bash(curl -s https://app.mynumbers.io/api/health)",
+      "Bash(curl -s -X POST https://app.mynumbers.io/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"adarsh@ankyadvisors.com\\\\\",\\\\\"password\\\\\":\\\\\"Ankya@2026\\\\\"}\")"
     ]
   }
 }
