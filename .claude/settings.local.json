@@ -47,7 +47,8 @@
       "Bash(curl -s http://localhost:5173/api/health)",
       "Bash(findstr \":3001\")",
       "Bash(curl -s -o nul -w \"%{http_code}\" http://localhost:5173)",
-      "Bash(findstr \":3001 :5173\")"
+      "Bash(findstr \":3001 :5173\")",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(64\\).toString\\('hex'\\)\\)\")"
     ]
   }
 }
