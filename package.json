@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "postinstall": "cd backend && npm install && npx prisma generate && cd ../frontend && npm install",
+    "postinstall": "cd backend && npm install --include=dev && npx prisma generate && cd ../frontend && npm install --include=dev",
     "build": "cd frontend && npm run build && cd ../backend && npm run build",
     "start": "cd backend && (npx prisma db push --accept-data-loss --skip-generate || echo 'db push warning') && (node dist/db/seed.js || echo 'seed skipped') && node dist/index.js",
     "seed": "cd backend && npx tsx src/db/seed.ts"
