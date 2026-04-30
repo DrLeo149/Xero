@@ -53,8 +53,11 @@ if (env.NODE_ENV === 'production') {
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 }
 
-const server = app.listen(env.PORT, async () => {
-  console.log(`[server] listening on http://localhost:${env.PORT}`);
+// Bind to 0.0.0.0 in production so Railway's healthcheck can reach the
+// container - the default 'localhost' only listens on loopback.
+const HOST = env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+const server = app.listen(env.PORT, HOST, async () => {
+  console.log(`[server] listening on http://${HOST}:${env.PORT}`);
   try {
     await bootScheduler();
   } catch (e) {
