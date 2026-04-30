@@ -8,7 +8,9 @@ function initialTheme(): Theme {
   if (typeof window === 'undefined') return 'light';
   const stored = localStorage.getItem(KEY) as Theme | null;
   if (stored === 'light' || stored === 'dark') return stored;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // Default to light mode regardless of OS preference. Users can flip to dark
+  // via the theme toggle, and that choice is remembered in localStorage.
+  return 'light';
 }
 
 function applyTheme(t: Theme) {
