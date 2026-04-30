@@ -11,7 +11,7 @@ import PageHeader from '../components/PageHeader';
  */
 
 const BOOKING_MAILTO =
-  'mailto:meghana@ankyaadvisors.com?subject=Free%2030-min%20review%20via%20mynumbers&body=Hi%20Meghana%2C%0A%0AI%27d%20like%20to%20book%20a%20free%2030-min%20review%20of%20my%20numbers.%0A%0A-%20Best%20time%3A%20%0A-%20What%20I%27d%20like%20to%20discuss%3A%20%0A%0AThanks!';
+  'mailto:adarsh@ankyadvisors.com?subject=Free%2030-min%20review%20via%20mynumbers&body=Hi%20Adarsh%2C%0A%0AI%27d%20like%20to%20book%20a%20free%2030-min%20review%20of%20my%20numbers.%0A%0A-%20Best%20time%3A%20%0A-%20What%20I%27d%20like%20to%20discuss%3A%20%0A%0AThanks!';
 
 export default function TailorThis() {
   return (
@@ -145,7 +145,7 @@ export default function TailorThis() {
             <span aria-hidden>→</span>
           </a>
           <div className="text-[11px] text-ink-400 mt-3">
-            or email <span className="text-ink-700">meghana@ankyaadvisors.com</span> directly
+            or email <span className="text-ink-700">adarsh@ankyadvisors.com</span> directly
           </div>
         </div>
       </section>
